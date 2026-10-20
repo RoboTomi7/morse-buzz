@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Morse Buzz</string>
+
+    <string name="status_off">Off</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_connected">Listening. You can lock your phone.</string>
+    <string name="detail_off">Tap Start to begin listening for buzzes.</string>
+
+    <string name="your_code">Your code</string>
+    <string name="start">Start</string>
+    <string name="stop">Stop</string>
+    <string name="share">Share</string>
+    <string name="test">Test</string>
+    <string name="new_code">New code</string>
+    <string name="battery">Allow running in background (recommended)</string>
+    <string name="relay">Relay server</string>
+    <string name="sender_url_label">Sender page URL (optional, used by Share)</string>
+    <string name="sender_url_hint">https://yourname.github.io/morse-buzz/</string>
+    <string name="help">Anyone with your code can buzz this phone. Tap New code to lock out old senders. The sender page and this app must use the same relay server.</string>
+
+    <string name="share_with_link">Hold the button to buzz my phone: %1$s\n(code %2$s)</string>
+    <string name="share_code_only">My Morse Buzz code is %1$s (relay: %2$s)</string>
+
+    <string name="channel_name">Live connection</string>
+    <string name="channel_desc">Shown while Morse Buzz is listening for buzzes.</string>
+    <string name="notif_ready">Listening on %1$s</string>
+    <string name="notif_connecting">Morse Buzz is connecting…</string>
+</resources>
