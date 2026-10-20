@@ -10,8 +10,8 @@ android {
         applicationId = "dev.morsebuzz"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 5   // keep in sync with the VERSION file
+        versionName = "5"
     }
 
     // A fixed key that ships with the project, so every build (local or GitHub Actions)

@@ -29,6 +29,7 @@ public class MainActivity extends Activity implements BuzzService.Listener {
     private Button battery;
     private Spinner brokerSpinner;
     private EditText senderUrl;
+    private TextView activityLog;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -43,6 +44,12 @@ public class MainActivity extends Activity implements BuzzService.Listener {
         battery = findViewById(R.id.battery);
         brokerSpinner = findViewById(R.id.broker);
         senderUrl = findViewById(R.id.sender_url);
+        activityLog = findViewById(R.id.activity_log);
+        try {
+            String v = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            ((TextView) findViewById(R.id.version)).setText(getString(R.string.version_label, v));
+        } catch (PackageManager.NameNotFoundException ignored) {
+        }
 
         toggle.setOnClickListener(v -> {
             if (BuzzService.isRunning()) {
@@ -138,6 +145,7 @@ public class MainActivity extends Activity implements BuzzService.Listener {
         detail.setText(s == BuzzService.State.OFF ? getString(R.string.detail_off) : BuzzService.detail);
         toggle.setText(s == BuzzService.State.OFF ? R.string.start : R.string.stop);
         buzzDot.setAlpha(BuzzService.buzzing ? 1f : 0.15f);
+        activityLog.setText(Buzzer.logText());
 
         PowerManager pm = getSystemService(PowerManager.class);
         boolean exempt = pm.isIgnoringBatteryOptimizations(getPackageName());

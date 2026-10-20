@@ -39,6 +39,7 @@
     }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { margin: 0; background: var(--bg); color: var(--text); }
   body {
     font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -102,6 +103,7 @@
   .decode-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--muted); }
   .linkbtn { background: none; border: 0; color: var(--accent-strong); cursor: pointer; padding: 0; font-size: 13px; }
 
+  .settings-hint { margin: -6px 0 0; text-align: center; }
   .settings { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; font-size: 14px; }
   .settings label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text); }
   input[type=range] { accent-color: var(--accent); width: 140px; }
@@ -113,6 +115,7 @@
   .chart b { color: var(--text); }
   .chart span { color: var(--accent-strong); letter-spacing: .1em; }
   h2 { font-size: 15px; margin: 0 0 10px; }
+  .foot { text-align: center; font-size: 12px; color: var(--muted); margin: 0; }
 </style>
 </head>
 <body>
@@ -152,9 +155,18 @@
     </div>
 
     <div class="settings">
-      <label>Speed <input type="range" id="wpm" min="5" max="25" step="1" value="10"> <span id="wpmVal">10 wpm</span></label>
+      <label><input type="checkbox" id="tidy" checked> Tidy up timing</label>
+      <label>Long press after <input type="range" id="longAt" min="80" max="1000" step="10" value="250"> <span id="longAtVal">0.25 s</span></label>
+      <label><span id="minBuzzLabel">Dot length</span> <input type="range" id="minBuzz" min="0" max="1000" step="50" value="200"> <span id="minBuzzVal">0.20 s</span></label>
+      <label id="dashRow">Dash length <input type="range" id="dash" min="100" max="2000" step="50" value="600"> <span id="dashVal">0.60 s</span></label>
+      <label>Gap between taps <input type="range" id="gap" min="0" max="1000" step="25" value="100"> <span id="gapVal">0.10 s</span></label>
       <label><input type="checkbox" id="tone" checked> Beep while held</label>
     </div>
+    <p class="hint settings-hint" id="settingsHint"></p>
+    <div class="settings">
+      <label>Morse speed <input type="range" id="wpm" min="5" max="25" step="1" value="10"> <span id="wpmVal">10 wpm</span></label>
+    </div>
+    <p class="hint settings-hint">Only used to read your taps as Morse letters under "What you sent" and to play typed text. It doesn't change what the phone gets.</p>
   </section>
 
   <section class="card">
@@ -166,7 +178,7 @@
       <button class="btn" id="sendBtn" type="submit" disabled>Send</button>
       <button class="btn ghost" id="stopBtn" type="button" hidden>Stop</button>
     </form>
-    <p class="hint">Plays at the speed above. Letters, numbers and . , ? / = - @ ' ! are supported.</p>
+    <p class="hint">Plays at the speed above (slower if your buzz lengths need more time). Letters, numbers and . , ? / = - @ ' ! are supported.</p>
   </section>
 
   <section class="card">
@@ -175,6 +187,7 @@
       <div class="chart" id="chart"></div>
     </details>
   </section>
+  <p class="foot">Morse Buzz version 5</p>
 </main>
 
 <script>
@@ -206,7 +219,9 @@
   const ui = {
     relay: $('relayPill'), phone: $('phonePill'), code: $('code'), broker: $('broker'),
     connectBtn: $('connectBtn'), hint: $('connectHint'), key: $('key'), out: $('out'), cur: $('cur'),
-    wpm: $('wpm'), wpmVal: $('wpmVal'), tone: $('tone'), text: $('text'), sendBtn: $('sendBtn'), stopBtn: $('stopBtn'),
+    wpm: $('wpm'), wpmVal: $('wpmVal'), minBuzz: $('minBuzz'), minBuzzVal: $('minBuzzVal'), gap: $('gap'), gapVal: $('gapVal'),
+    tidy: $('tidy'), dash: $('dash'), dashVal: $('dashVal'), dashRow: $('dashRow'),
+    minBuzzLabel: $('minBuzzLabel'), settingsHint: $('settingsHint'), longAt: $('longAt'), longAtVal: $('longAtVal'), tone: $('tone'), text: $('text'), sendBtn: $('sendBtn'), stopBtn: $('stopBtn'),
   };
 
   // ------------------------------------------------------------------ setup
@@ -227,6 +242,48 @@
   showWpm();
   ui.wpm.addEventListener('input', () => { showWpm(); safeSet('mb_wpm', ui.wpm.value); });
   ui.tone.addEventListener('change', () => safeSet('mb_tone', ui.tone.checked ? '1' : '0'));
+
+  const savedMin = safeGet('mb_min');
+  if (savedMin !== null && savedMin !== '') ui.minBuzz.value = savedMin;
+  const minBuzzMs = () => Number(ui.minBuzz.value);
+  const showMin = () => { ui.minBuzzVal.textContent = (minBuzzMs() / 1000).toFixed(2) + ' s'; };
+  showMin();
+  ui.minBuzz.addEventListener('input', () => { showMin(); safeSet('mb_min', ui.minBuzz.value); });
+
+  const savedGap = safeGet('mb_gap');
+  if (savedGap !== null && savedGap !== '') ui.gap.value = savedGap;
+  const gapMs = () => Number(ui.gap.value);
+  const showGap = () => { ui.gapVal.textContent = (gapMs() / 1000).toFixed(2) + ' s'; };
+  showGap();
+  ui.gap.addEventListener('input', () => { showGap(); safeSet('mb_gap', ui.gap.value); });
+
+  const savedDash = safeGet('mb_dash');
+  if (savedDash !== null && savedDash !== '') ui.dash.value = savedDash;
+  const dashMs = () => Number(ui.dash.value);
+  const showDash = () => { ui.dashVal.textContent = (dashMs() / 1000).toFixed(2) + ' s'; };
+  showDash();
+  ui.dash.addEventListener('input', () => { showDash(); safeSet('mb_dash', ui.dash.value); });
+
+  const savedLong = safeGet('mb_long');
+  if (savedLong !== null && savedLong !== '') ui.longAt.value = savedLong;
+  const showLong = () => { ui.longAtVal.textContent = (Number(ui.longAt.value) / 1000).toFixed(2) + ' s'; };
+  showLong();
+  ui.longAt.addEventListener('input', () => { showLong(); safeSet('mb_long', ui.longAt.value); });
+
+  // "Tidy up timing": every press is sent as an exact short or long buzz. Pauses are not
+  // interpreted (this is used for codes other than Morse too); they just happen in real
+  // time, never shorter than the gap. Off: buzzes follow your finger.
+  if (safeGet('mb_tidy') === '0') ui.tidy.checked = false;
+  const tidy = () => ui.tidy.checked;
+  const showMode = () => {
+    ui.minBuzzLabel.textContent = tidy() ? 'Dot length' : 'Minimum buzz';
+    ui.dashRow.hidden = !tidy();
+    ui.settingsHint.textContent = tidy()
+      ? "Every press is sent as a short buzz (dot length) or, if held past the long press time, a long buzz (dash length). Pauses aren't interpreted: each buzz starts in step with your presses, keeping your rhythm, with at least the gap between buzzes. A long buzz starts once you pass the long press time, so long buzzes run that far behind you."
+      : "Buzzes follow your finger. Quick taps last at least the minimum buzz, and the phone always stays still for at least the gap between two buzzes, so fast taps never blur together.";
+  };
+  showMode();
+  ui.tidy.addEventListener('change', () => { showMode(); safeSet('mb_tidy', tidy() ? '1' : '0'); });
 
   const chart = $('chart');
   for (const [k, v] of Object.entries(MORSE)) {
@@ -254,7 +311,7 @@
   function setReady(ready) {
     ui.key.disabled = !ready;
     ui.sendBtn.disabled = !ready;
-    if (!ready) { keyUp(); stopText(); }
+    if (!ready) { keyUp(); stopText(); phone.reset(); }
   }
 
   function loadMqtt() {
@@ -373,9 +430,9 @@
     dec.pressedAt = performance.now();
   }
   function decRelease() {
-    const u = unitMs();
+    const u = playToken ? playUnitMs() : unitMs();   // text playback may run slower
     const dur = performance.now() - dec.pressedAt;
-    dec.symbols += dur < 2 * u ? '.' : '-';
+    dec.symbols += dur < longMs() ? '.' : '-';
     ui.cur.textContent = dec.symbols.replace(/\./g, '·').replace(/-/g, '−');
     dec.letterTimer = setTimeout(endLetter, 2.5 * u);
     dec.wordTimer = setTimeout(() => {
@@ -395,26 +452,117 @@
 
   // ------------------------------------------------------------------ key
 
-  let down = false;
-  let heartbeat = 0;
+  // What the phone feels: a queue of buzzes played one after another. Each buzz waits for
+  // its gap after the previous one ends, so nothing ever blurs together, and the beep
+  // follows this queue too, so you hear exactly what the phone feels.
+  //   { gap, dur }          a buzz of exactly `dur` ms (tidy mode)
+  //   { gap, open: true }   a buzz that lasts until close() (free mode, follows your finger)
+  const phone = {
+    on: false, onAt: 0, offAt: -Infinity, queue: [], cur: null, heartbeat: 0, timer: 0, seq: 0,
+    // Each buzz is numbered so the phone can ignore duplicated or late messages.
+    session: Math.random().toString(36).slice(2, 8),
+
+    add(item) { this.queue.push(item); this.run(); return item; },
+
+    /** Finish an open buzz. heldMs = how long the finger was down. */
+    close(item, heldMs) {
+      if (!item.open) return;
+      item.open = false;
+      const ran = item === this.cur ? performance.now() - this.onAt : heldMs;
+      item.dur = Math.max(minBuzzMs(), ran);
+      this.run();
+    },
+
+    run() {
+      clearTimeout(this.timer);
+      while (this.queue.length) {
+        const now = performance.now();
+        const it = this.queue[0];
+        if (!this.on) {
+          const earliest = this.offAt + it.gap;
+          if (now < earliest) return this.later(earliest - now);
+          this.start(it, now);
+        }
+        if (it.open) return;                       // wait for the finger to lift
+        const endAt = this.onAt + it.dur;
+        if (now < endAt) return this.later(endAt - now);
+        this.stop(now);
+        this.queue.shift();
+      }
+    },
+    later(ms) { this.timer = setTimeout(() => this.run(), ms); },
+
+    start(it, now) {
+      this.on = true;
+      this.onAt = now;
+      this.cur = it;
+      this.seq += 1;
+      // "1:SESSION:N:GAP" = buzz N started (repeated as a heartbeat while it lasts)
+      const msg = '1:' + this.session + ':' + this.seq + ':' + Math.round(it.gap);
+      send(msg);
+      this.heartbeat = setInterval(() => send(msg), HEARTBEAT_MS);
+      tone(true);
+    },
+    stop(now) {
+      if (!this.on) return;
+      this.on = false;
+      this.offAt = now;
+      this.cur = null;
+      clearInterval(this.heartbeat);
+      // "0:SESSION:N:DUR" = buzz N ended; the phone plays it for exactly DUR ms
+      send('0:' + this.session + ':' + this.seq + ':' + Math.round(now - this.onAt));
+      tone(false);
+    },
+    reset() {
+      clearTimeout(this.timer);
+      this.queue = [];
+      this.stop(performance.now());
+    },
+  };
+
+  // The key itself (what your finger is doing). Drives the decoder, the button look, and
+  // what gets queued for the phone.
+  const press = { down: false, at: 0, tidy: false, gap: 0, sent: false, dashTimer: 0, item: null };
+  // Where a short press becomes a long one. Typed-text playback uses its own Morse timing.
+  // The "What you sent" decoder uses the same split, so both always agree.
+  const longMs = () => (playToken ? 2 * playUnitMs() : Number(ui.longAt.value));
+
+  function queueSymbol(isDash) {
+    if (press.sent) return;
+    press.sent = true;
+    phone.add({ gap: press.gap, dur: isDash ? dashMs() : minBuzzMs() });
+  }
 
   function keyDown() {
-    if (down || ui.key.disabled) return;
-    down = true;
-    send('1');
-    heartbeat = setInterval(() => send('1'), HEARTBEAT_MS);
+    if (press.down || ui.key.disabled) return;
+    const now = performance.now();
+    press.down = true;
+    press.at = now;
     ui.key.classList.add('down');
-    tone(true);
     decPress();
+    press.tidy = tidy();
+    if (press.tidy) {
+      press.gap = gapMs();
+      press.sent = false;
+      // Still held at the long press time: it's long, send it now rather than waiting for release.
+      press.dashTimer = setTimeout(() => { if (press.down) queueSymbol(true); }, longMs());
+    } else {
+      press.item = phone.add({ gap: gapMs(), open: true });
+    }
   }
   function keyUp() {
-    if (!down) return;
-    down = false;
-    clearInterval(heartbeat);
-    send('0');
+    if (!press.down) return;
+    const now = performance.now();
+    press.down = false;
     ui.key.classList.remove('down');
-    tone(false);
     decRelease();
+    if (press.tidy) {
+      clearTimeout(press.dashTimer);
+      queueSymbol(false);                          // released before the long press time: short
+    } else if (press.item) {
+      phone.close(press.item, now - press.at);
+      press.item = null;
+    }
   }
 
   ui.key.addEventListener('pointerdown', (e) => {
@@ -449,11 +597,17 @@
 
   let playToken = 0;
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  // Play typed text no faster than the phone can buzz it, so it never falls behind
+  // and dashes stay 3x as long as dots.
+  const playUnitMs = () => (tidy()
+    ? Math.max(unitMs(), minBuzzMs(), dashMs() / 3, gapMs())
+    : Math.max(unitMs(), minBuzzMs(), gapMs()));
 
   function stopText() {
     if (!playToken) return;
     playToken = 0;
     keyUp();
+    phone.reset();                                 // drop anything still queued
     ui.stopBtn.hidden = true;
   }
 
@@ -467,16 +621,16 @@
         const code = MORSE[letters[l]];
         for (let s = 0; s < code.length; s++) {
           if (token !== playToken) return;
-          const u = unitMs();
+          const u = playUnitMs();
           keyDown();
           await sleep(code[s] === '.' ? u : 3 * u);
           keyUp();
           if (token !== playToken) return;
           await sleep(u);                  // gap inside a letter
         }
-        await sleep(2 * unitMs());         // letter gap = 3 units total
+        await sleep(2 * playUnitMs());     // letter gap = 3 units total
       }
-      await sleep(4 * unitMs());           // word gap = 7 units total
+      await sleep(4 * playUnitMs());       // word gap = 7 units total
     }
     if (token === playToken) { playToken = 0; ui.stopBtn.hidden = true; }
   }

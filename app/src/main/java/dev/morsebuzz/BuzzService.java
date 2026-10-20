@@ -114,9 +114,17 @@ public class BuzzService extends Service {
         super.onCreate();
         createChannel();
         handler = new Handler(worker().getLooper());
-        buzzer = new Buzzer(this, worker().getLooper(), on -> {
-            buzzing = on;
-            notifyListeners();
+        buzzer = new Buzzer(this, worker().getLooper(), new Buzzer.Listener() {
+            @Override
+            public void onBuzz(boolean on) {
+                buzzing = on;
+                notifyListeners();
+            }
+
+            @Override
+            public void onActivity() {
+                notifyListeners();
+            }
         });
 
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
@@ -350,11 +358,8 @@ public class BuzzService extends Service {
             // Called on Paho's thread; Buzzer hops to our handler thread itself.
             if (c != client || !t.equals(topic)) return;
             byte[] p = message.getPayload();
-            if (p.length > 0 && p[0] == '1') {
-                buzzer.down();
-            } else {
-                buzzer.up();
-            }
+            if (p.length == 0) return;
+            buzzer.onMessage(new String(p, StandardCharsets.UTF_8));
         }
 
         @Override

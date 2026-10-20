@@ -29,7 +29,7 @@ Open this folder in Android Studio, plug in the phone with USB debugging on, and
 
 ## 2. Put the sender page online
 
-In the GitHub repo, go to **Settings → Pages**, set Source to **Deploy from a branch**, and choose branch `main`, folder `/docs`. A minute later the page is live at `https://YOURNAME.github.io/morse-buzz/`.
+In the GitHub repo, go to **Settings → Pages** and set Source to **GitHub Actions**. Every build then also publishes `docs/` to `https://YOURNAME.github.io/morse-buzz/`, so the page always matches the latest upload.
 
 On a laptop you can also just double-click `docs/index.html` and it works.
 

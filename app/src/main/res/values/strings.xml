@@ -22,6 +22,9 @@
     <string name="share_with_link">Hold the button to buzz my phone: %1$s\n(code %2$s)</string>
     <string name="share_code_only">My Morse Buzz code is %1$s (relay: %2$s)</string>
 
+    <string name="version_label">Morse Buzz version %1$s</string>
+    <string name="activity_label">Recent activity (newest first)</string>
+
     <string name="channel_name">Live connection</string>
     <string name="channel_desc">Shown while Morse Buzz is listening for buzzes.</string>
     <string name="notif_ready">Listening on %1$s</string>
