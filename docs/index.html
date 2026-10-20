@@ -102,7 +102,6 @@
   .decode-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--muted); }
   .linkbtn { background: none; border: 0; color: var(--accent-strong); cursor: pointer; padding: 0; font-size: 13px; }
 
-  .settings-hint { margin: -6px 0 0; text-align: center; }
   .settings { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; font-size: 14px; }
   .settings label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text); }
   input[type=range] { accent-color: var(--accent); width: 140px; }
@@ -154,10 +153,8 @@
 
     <div class="settings">
       <label>Speed <input type="range" id="wpm" min="5" max="25" step="1" value="10"> <span id="wpmVal">10 wpm</span></label>
-      <label>Minimum buzz <input type="range" id="minBuzz" min="0" max="1000" step="50" value="200"> <span id="minBuzzVal">0.20 s</span></label>
       <label><input type="checkbox" id="tone" checked> Beep while held</label>
     </div>
-    <p class="hint settings-hint">Quick taps buzz for at least the minimum, so they're easy to feel. Taps faster than that are queued up so each one still buzzes separately.</p>
   </section>
 
   <section class="card">
@@ -169,7 +166,7 @@
       <button class="btn" id="sendBtn" type="submit" disabled>Send</button>
       <button class="btn ghost" id="stopBtn" type="button" hidden>Stop</button>
     </form>
-    <p class="hint">Plays at the speed above (slower if the minimum buzz is longer than a dot). Letters, numbers and . , ? / = - @ ' ! are supported.</p>
+    <p class="hint">Plays at the speed above. Letters, numbers and . , ? / = - @ ' ! are supported.</p>
   </section>
 
   <section class="card">
@@ -209,7 +206,7 @@
   const ui = {
     relay: $('relayPill'), phone: $('phonePill'), code: $('code'), broker: $('broker'),
     connectBtn: $('connectBtn'), hint: $('connectHint'), key: $('key'), out: $('out'), cur: $('cur'),
-    wpm: $('wpm'), wpmVal: $('wpmVal'), minBuzz: $('minBuzz'), minBuzzVal: $('minBuzzVal'), tone: $('tone'), text: $('text'), sendBtn: $('sendBtn'), stopBtn: $('stopBtn'),
+    wpm: $('wpm'), wpmVal: $('wpmVal'), tone: $('tone'), text: $('text'), sendBtn: $('sendBtn'), stopBtn: $('stopBtn'),
   };
 
   // ------------------------------------------------------------------ setup
@@ -230,13 +227,6 @@
   showWpm();
   ui.wpm.addEventListener('input', () => { showWpm(); safeSet('mb_wpm', ui.wpm.value); });
   ui.tone.addEventListener('change', () => safeSet('mb_tone', ui.tone.checked ? '1' : '0'));
-
-  const savedMin = safeGet('mb_min');
-  if (savedMin !== null && savedMin !== '') ui.minBuzz.value = savedMin;
-  const minBuzzMs = () => Number(ui.minBuzz.value);
-  const showMin = () => { ui.minBuzzVal.textContent = (minBuzzMs() / 1000).toFixed(2) + ' s'; };
-  showMin();
-  ui.minBuzz.addEventListener('input', () => { showMin(); safeSet('mb_min', ui.minBuzz.value); });
 
   const chart = $('chart');
   for (const [k, v] of Object.entries(MORSE)) {
@@ -264,7 +254,7 @@
   function setReady(ready) {
     ui.key.disabled = !ready;
     ui.sendBtn.disabled = !ready;
-    if (!ready) { keyUp(); stopText(); phone.reset(); }
+    if (!ready) { keyUp(); stopText(); }
   }
 
   function loadMqtt() {
@@ -383,7 +373,7 @@
     dec.pressedAt = performance.now();
   }
   function decRelease() {
-    const u = playToken ? playUnitMs() : unitMs();   // text playback may run slower
+    const u = unitMs();
     const dur = performance.now() - dec.pressedAt;
     dec.symbols += dur < 2 * u ? '.' : '-';
     ui.cur.textContent = dec.symbols.replace(/\./g, '·').replace(/-/g, '−');
@@ -405,70 +395,26 @@
 
   // ------------------------------------------------------------------ key
 
-  // What the phone feels. Key presses and releases are queued here so that every buzz
-  // lasts at least the minimum, and back-to-back taps keep a short gap between them
-  // instead of merging into one long buzz. The beep follows this too, so you hear
-  // exactly what the phone feels.
-  const phone = {
-    on: false, onAt: 0, offAt: -Infinity, queue: [], heartbeat: 0, timer: 0,
-
-    gapMs() { return Math.min(100, minBuzzMs()); },
-    press() { this.queue.push('on'); this.run(); },
-    release() { this.queue.push('off'); this.run(); },
-
-    run() {
-      clearTimeout(this.timer);
-      while (this.queue.length) {
-        const now = performance.now();
-        const op = this.queue[0];
-        const earliest = op === 'on' ? this.offAt + this.gapMs() : this.onAt + minBuzzMs();
-        if (now < earliest) {
-          this.timer = setTimeout(() => this.run(), earliest - now);
-          return;
-        }
-        this.queue.shift();
-        if (op === 'on') this.start(now); else this.stop(now);
-      }
-    },
-    start(now) {
-      if (this.on) return;
-      this.on = true;
-      this.onAt = now;
-      send('1');
-      this.heartbeat = setInterval(() => send('1'), HEARTBEAT_MS);
-      tone(true);
-    },
-    stop(now) {
-      if (!this.on) return;
-      this.on = false;
-      this.offAt = now;
-      clearInterval(this.heartbeat);
-      send('0');
-      tone(false);
-    },
-    reset() {
-      clearTimeout(this.timer);
-      this.queue = [];
-      this.stop(performance.now());
-    },
-  };
-
-  // The key itself (what your finger is doing). Drives the decoder and the button look.
   let down = false;
+  let heartbeat = 0;
 
   function keyDown() {
     if (down || ui.key.disabled) return;
     down = true;
+    send('1');
+    heartbeat = setInterval(() => send('1'), HEARTBEAT_MS);
     ui.key.classList.add('down');
+    tone(true);
     decPress();
-    phone.press();
   }
   function keyUp() {
     if (!down) return;
     down = false;
+    clearInterval(heartbeat);
+    send('0');
     ui.key.classList.remove('down');
+    tone(false);
     decRelease();
-    phone.release();
   }
 
   ui.key.addEventListener('pointerdown', (e) => {
@@ -503,9 +449,6 @@
 
   let playToken = 0;
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  // If the minimum buzz is longer than a dot, slow the whole message down to match,
-  // so dashes stay 3x as long as dots.
-  const playUnitMs = () => Math.max(unitMs(), minBuzzMs());
 
   function stopText() {
     if (!playToken) return;
@@ -524,16 +467,16 @@
         const code = MORSE[letters[l]];
         for (let s = 0; s < code.length; s++) {
           if (token !== playToken) return;
-          const u = playUnitMs();
+          const u = unitMs();
           keyDown();
           await sleep(code[s] === '.' ? u : 3 * u);
           keyUp();
           if (token !== playToken) return;
           await sleep(u);                  // gap inside a letter
         }
-        await sleep(2 * playUnitMs());     // letter gap = 3 units total
+        await sleep(2 * unitMs());         // letter gap = 3 units total
       }
-      await sleep(4 * playUnitMs());       // word gap = 7 units total
+      await sleep(4 * unitMs());           // word gap = 7 units total
     }
     if (token === playToken) { playToken = 0; ui.stopBtn.hidden = true; }
   }
