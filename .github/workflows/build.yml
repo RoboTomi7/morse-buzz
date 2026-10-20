@@ -13,27 +13,45 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Unpack morse-buzz.zip
+      - name: Unpack uploaded project zip
         run: |
-          if [ -f morse-buzz.zip ]; then
-            rm -rf /tmp/mb-unpacked && unzip -q -o morse-buzz.zip -d /tmp/mb-unpacked
-            src=/tmp/mb-unpacked; [ -d "$src/morse-buzz" ] && src="$src/morse-buzz"
-            rm -rf "$src/.github"
-            cp -a "$src/." .
-            git rm -q morse-buzz.zip
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -A
-            git commit -q -m "Unpack morse-buzz.zip"
+          newest=""; newest_t=0
+          for f in morse-buzz*.zip; do
+            [ -f "$f" ] || continue
+            t=$(git log -1 --format=%ct -- "$f"); t=${t:-0}
+            if [ "$t" -ge "$newest_t" ]; then newest="$f"; newest_t=$t; fi
+          done
+          if [ -z "$newest" ]; then echo "No project zip to unpack"; exit 0; fi
+
+          rm -rf /tmp/mb && unzip -q -o "$newest" -d /tmp/mb
+          src=/tmp/mb; [ -d "$src/morse-buzz" ] && src="$src/morse-buzz"
+          zipver=0; [ -f "$src/VERSION" ] && zipver=$(tr -dc 0-9 < "$src/VERSION")
+          repover=0; [ -f VERSION ] && repover=$(tr -dc 0-9 < VERSION)
+          zipver=${zipver:-0}; repover=${repover:-0}
+          echo "$newest is version $zipver; repo has version $repover"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -q -- morse-buzz*.zip
+          if [ "$zipver" -lt "$repover" ]; then
+            git commit -q -m "Remove outdated $newest (version $zipver)"
             git push -q
+            echo "::error::$newest is version $zipver, older than the version $repover already here. It was removed and nothing was changed. Upload the newest zip instead."
+            exit 1
           fi
+          rm -rf "$src/.github"
+          cp -a "$src/." .
+          git add -A
+          git commit -q -m "Unpack $newest (version $zipver)"
+          git push -q
 
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
-
 
       - name: Build
         run: |
@@ -47,3 +65,27 @@ jobs:
         with:
           name: MorseBuzz-apk
           path: MorseBuzz.apk
+
+  pages:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: deploy
+        uses: actions/deploy-pages@v4
