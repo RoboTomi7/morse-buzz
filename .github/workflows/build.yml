@@ -1,0 +1,50 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unpack morse-buzz.zip
+        run: |
+          if [ -f morse-buzz.zip ]; then
+            rm -rf /tmp/mb-unpacked && unzip -q -o morse-buzz.zip -d /tmp/mb-unpacked
+            src=/tmp/mb-unpacked; [ -d "$src/morse-buzz" ] && src="$src/morse-buzz"
+            rm -rf "$src/.github"
+            cp -a "$src/." .
+            git rm -q morse-buzz.zip
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -q -m "Unpack morse-buzz.zip"
+            git push -q
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Build
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk MorseBuzz.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MorseBuzz-apk
+          path: MorseBuzz.apk
