@@ -332,8 +332,11 @@ public class BuzzService extends Service {
             handler.post(() -> {
                 if (c != client) return;
                 try {
-                    c.subscribe(topic, 0);
-                    c.publish(statusTopic, bytes("1"), 1, true);
+                    // QoS 1: the relay re-sends anything the phone didn't confirm, so a
+                    // buzz can't silently go missing. Buzzer drops the duplicates.
+                    c.subscribe(topic, 1);
+                    // "1:PROTOCOL:VERSION" tells the sender page which message types we understand.
+                    c.publish(statusTopic, bytes("1:" + Buzzer.PROTOCOL + ":" + appVersion()), 1, true);
                     setState(State.CONNECTED, "Ready. Code " + Prefs.pretty(code));
                 } catch (MqttException e) {
                     setState(State.CONNECTING, "Subscribe failed. Retrying…");
@@ -364,6 +367,14 @@ public class BuzzService extends Service {
 
         @Override
         public void deliveryComplete(IMqttDeliveryToken token) {
+        }
+    }
+
+    private String appVersion() {
+        try {
+            return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (Exception e) {
+            return "?";
         }
     }
 

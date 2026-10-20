@@ -187,7 +187,7 @@
       <div class="chart" id="chart"></div>
     </details>
   </section>
-  <p class="foot">Morse Buzz version 5</p>
+  <p class="foot">Morse Buzz version 6</p>
 </main>
 
 <script>
@@ -346,6 +346,7 @@
     setReady(false);
     setPill(ui.relay, 'warn', 'Connecting…');
     setPill(ui.phone, '', 'Phone: unknown');
+    phoneProto = 0;
 
     let mqtt;
     try { mqtt = await loadMqtt(); } catch (e) {
@@ -380,8 +381,19 @@
     });
     c.on('message', (t, payload) => {
       if (c !== client || t !== statusTopic) return;
-      const online = payload.toString() === '1';
-      setPill(ui.phone, online ? 'ok' : 'bad', online ? 'Phone online' : 'Phone offline');
+      // "1:PROTOCOL:VERSION" from app 6+, plain "1" from older apps, "0" = offline
+      const parts = payload.toString().split(':');
+      const online = parts[0] === '1';
+      if (online) {
+        phoneProto = Number(parts[1]) || 0;
+        const ver = parts[2] ? 'app v' + parts[2] : 'old app';
+        setPill(ui.phone, phoneProto >= 6 ? 'ok' : 'warn', 'Phone online · ' + ver);
+        if (phoneProto < 6) {
+          ui.hint.textContent = 'The phone has an older version of the app. Install the latest APK so short and long buzzes can never merge on a bad connection.';
+        }
+      } else {
+        setPill(ui.phone, 'bad', 'Phone offline');
+      }
     });
     c.on('reconnect', () => { if (c === client) { setReady(false); setPill(ui.relay, 'warn', 'Reconnecting…'); } });
     c.on('offline', () => { if (c === client) { setReady(false); setPill(ui.relay, 'bad', 'Offline'); } });
@@ -392,8 +404,12 @@
     });
   }
 
-  function send(v) {
-    if (client && client.connected) client.publish(topic, v, { qos: 0 });
+  // Which message types the phone's app understands (from its presence message).
+  let phoneProto = 0;
+
+  // qos 1 = the relay confirms delivery and re-sends if needed (the phone drops duplicates).
+  function send(v, qos = 0) {
+    if (client && client.connected) client.publish(topic, v, { qos });
   }
 
   $('connectForm').addEventListener('submit', (e) => { e.preventDefault(); connect(); });
@@ -458,7 +474,7 @@
   //   { gap, dur }          a buzz of exactly `dur` ms (tidy mode)
   //   { gap, open: true }   a buzz that lasts until close() (free mode, follows your finger)
   const phone = {
-    on: false, onAt: 0, offAt: -Infinity, queue: [], cur: null, heartbeat: 0, timer: 0, seq: 0,
+    on: false, fixed: false, onAt: 0, offAt: -Infinity, queue: [], cur: null, heartbeat: 0, timer: 0, seq: 0,
     // Each buzz is numbered so the phone can ignore duplicated or late messages.
     session: Math.random().toString(36).slice(2, 8),
 
@@ -497,11 +513,19 @@
       this.onAt = now;
       this.cur = it;
       this.seq += 1;
+      tone(true);
+      if (!it.open && phoneProto >= 6) {
+        // "2:SESSION:N:GAP:DUR" = one complete buzz of exactly DUR ms. A single message,
+        // so a lost or late message can't merge two buzzes or stretch one.
+        this.fixed = true;
+        send('2:' + this.session + ':' + this.seq + ':' + Math.round(it.gap) + ':' + Math.round(it.dur), 1);
+        return;
+      }
+      this.fixed = false;
       // "1:SESSION:N:GAP" = buzz N started (repeated as a heartbeat while it lasts)
       const msg = '1:' + this.session + ':' + this.seq + ':' + Math.round(it.gap);
-      send(msg);
+      send(msg, 1);
       this.heartbeat = setInterval(() => send(msg), HEARTBEAT_MS);
-      tone(true);
     },
     stop(now) {
       if (!this.on) return;
@@ -509,9 +533,10 @@
       this.offAt = now;
       this.cur = null;
       clearInterval(this.heartbeat);
-      // "0:SESSION:N:DUR" = buzz N ended; the phone plays it for exactly DUR ms
-      send('0:' + this.session + ':' + this.seq + ':' + Math.round(now - this.onAt));
       tone(false);
+      if (this.fixed) return;                      // the phone already knows when to stop
+      // "0:SESSION:N:DUR" = buzz N ended; the phone plays it for exactly DUR ms
+      send('0:' + this.session + ':' + this.seq + ':' + Math.round(now - this.onAt), 1);
     },
     reset() {
       clearTimeout(this.timer);

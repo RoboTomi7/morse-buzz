@@ -19,10 +19,12 @@ import java.util.Locale;
 /**
  * Turns key messages from the sender page into vibration.
  *
- * Message format (v2). Every buzz has a session id (one per open sender page) and a number:
- *   "1:SESSION:N:GAP"  buzz N started (repeated every ~400 ms while held, as a heartbeat).
- *                      GAP = minimum silence in ms before this buzz may start.
- *   "0:SESSION:N:DUR"  buzz N ended. DUR = how long buzz N should last in ms.
+ * Messages. Every buzz has a session id (one per open sender page) and a number:
+ *   "2:SESSION:N:GAP:DUR"  a complete buzz: wait at least GAP ms after the previous one,
+ *                          then buzz exactly DUR ms. One message, so nothing can split or
+ *                          merge it. Used for tidy-mode short/long buzzes.
+ *   "1:SESSION:N:GAP"      buzz N started (repeated every ~400 ms while held, as a heartbeat).
+ *   "0:SESSION:N:DUR"      buzz N ended. DUR = how long buzz N should last in ms.
  * Old pages send plain "1" / "0", which still works.
  *
  * Because every buzz has a number, a duplicated or late message can never make an extra
@@ -39,6 +41,9 @@ final class Buzzer {
 
         void onActivity();
     }
+
+    /** Message types this app understands; sent to the page in the presence message. */
+    static final int PROTOCOL = 6;
 
     private static final long TIMEOUT_MS = 1500;
     private static final long WATCHDOG_TICK_MS = 200;
@@ -120,6 +125,10 @@ final class Buzzer {
         long n = parse(f[2]);
         long arg = f.length > 3 ? parse(f[3]) : 0;
         if (n < 0) return;
+        if (f[0].equals("2")) {
+            if (f.length >= 5) onFixed(f[1], n, arg, parse(f[4]), now);
+            return;
+        }
         if (isStart) onStart(f[1], n, arg, now);
         else onEnd(f[1], n, arg, now);
     }
@@ -148,6 +157,30 @@ final class Buzzer {
         curStartToken = new Object();
         handler.postAtTime(() -> motorStart(seq), curStartToken, curStartAt);
         armWatchdog();
+    }
+
+    /** A complete buzz of known length. */
+    private void onFixed(String s, long n, long gap, long dur, long now) {
+        newSessionIfNeeded(s, now);
+        if (n <= maxEnded || n <= cur || dur <= 0) {
+            if (n <= maxEnded || n == cur) log("ignored repeated buzz #" + n);
+            return;
+        }
+        if (!curEnded) endCurrentNow(now, "no end message for #" + cur);
+        cur = n;
+        curEnded = true;
+        maxEnded = n;
+        gap = clamp(gap, 0, MAX_GAP_MS);
+        dur = clamp(dur, 1, MAX_DUR_MS);
+        curStartAt = Math.max(now, offAt + gap);
+        long stopAt = curStartAt + dur;
+        offAt = stopAt;
+        log("← buzz #" + n + "  " + dur + " ms"
+                + (curStartAt > now ? "  (waits " + (curStartAt - now) + " ms for gap)" : ""));
+        final long seq = n;
+        curStartToken = new Object();
+        handler.postAtTime(() -> motorStart(seq), curStartToken, curStartAt);
+        handler.postAtTime(() -> motorStop(seq), timers, stopAt);
     }
 
     private void onEnd(String s, long n, long dur, long now) {
